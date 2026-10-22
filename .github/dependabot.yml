@@ -1,0 +1,75 @@
+# Canonical Dependabot config for the WYRE-AI *-mcp / node-* fleet.
+#
+# Goal: keep PR volume manageable for a small team. Updates are GROUPED so a
+# repo gets a handful of PRs per week instead of one-per-package, and the
+# dependabot-janitor (daily) auto-merges the green grouped PRs. Only
+# PRODUCTION-dependency MAJOR bumps land as individual PRs for human review,
+# since those can carry behavioural breaking changes a green test suite misses.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    groups:
+      # All dev/CI tooling (eslint, typescript, @types/*, etc.) incl. majors ->
+      # ONE PR. The janitor auto-merges it when CI is green.
+      # msw + vitest EXCLUDED here (2026-10-13, task_1791494841949) -- a
+      # grouped msw+vitest MAJOR bump (e.g. msw 2.x->3.x + vitest 4.x->5.x)
+      # produces an internally-inconsistent lockfile that Dependabot's own
+      # version-resolution doesn't catch (npm ci EUSAGE; a newer local npm
+      # silently auto-heals the gap, so a casual local check false-passes --
+      # only reproduces against CI's exact npm version). Confirmed across 8
+      # repos in burn-down round 2. Their MAJORS now fall through ungrouped
+      # -> individual PRs, held for human review, same as production majors
+      # below. Minor/patch bumps are unaffected -- see the group below.
+      dev-dependencies:
+        dependency-type: "development"
+        update-types: ["major", "minor", "patch"]
+        exclude-patterns:
+          - "msw"
+          - "vitest"
+          - "@vitest/*"
+      # msw/vitest minor+patch stay grouped+auto-merged like any other dev dep.
+      dev-dependencies-msw-vitest-minor-patch:
+        dependency-type: "development"
+        update-types: ["minor", "patch"]
+        patterns:
+          - "msw"
+          - "vitest"
+          - "@vitest/*"
+      # Production minor + patch → ONE PR. Auto-merged when green.
+      production-minor-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+    # Production MAJORS are intentionally NOT grouped → individual PRs, held for
+    # human review (never auto-merged).
+    ignore:
+      # typescript 7.x breaks this fleet's toolchain: DTS emit (tsup/rollup-plugin-dts
+      # TS5101 baseUrl-deprecated-as-error), and typescript-eslint (still <6.1.0 as of
+      # 8.66.0, no TS7 support yet). Has broken main 3x on some repos because Dependabot
+      # has no memory of a prior manual revert and just re-proposes the same major again.
+      # Deliberate hold, not a permanent blind -- remove once typescript-eslint + the
+      # tsup/DTS toolchain support TS7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns: ["*"]
+
