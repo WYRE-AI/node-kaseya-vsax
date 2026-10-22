@@ -1,0 +1,30 @@
+import { pathParam } from '../http.js';
+import type { ListParams, PaginatedIterable } from '../pagination.js';
+import type { Asset, AssetSection } from '../types/index.js';
+import { BaseResource } from './base.js';
+
+export interface AssetListParams extends ListParams {
+  /** Sections to include (default: all but AvailableUpdates and Security). */
+  include?: readonly AssetSection[];
+}
+
+const includeQuery = (include?: readonly AssetSection[]): { include: string | undefined } => ({
+  include: include && include.length > 0 ? include.join(',') : undefined,
+});
+
+/** Assets (`/assets`). */
+export class AssetsResource extends BaseResource {
+  async list(params?: AssetListParams): Promise<Asset[]> {
+    return this.getList<Asset>('/assets', params, includeQuery(params?.include));
+  }
+
+  listAll(params?: AssetListParams): PaginatedIterable<Asset> {
+    return this.iterate<Asset>('/assets', params, includeQuery(params?.include));
+  }
+
+  async get(deviceId: string, include?: readonly AssetSection[]): Promise<Asset> {
+    return this.http.request<Asset>('GET', `/assets/${pathParam(deviceId, 'id')}`, {
+      query: includeQuery(include),
+    });
+  }
+}

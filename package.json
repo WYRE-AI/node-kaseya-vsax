@@ -1,0 +1,80 @@
+{
+  "name": "@wyre-ai/node-kaseya-vsax",
+  "version": "0.0.0-development",
+  "type": "module",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "description": "Fully-typed Node.js/TypeScript client library for the Kaseya VSA X (VSA 10) REST API v3",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src tests",
+    "lint:fix": "eslint src tests --fix",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "kaseya",
+    "vsa-x",
+    "vsax",
+    "vsa10",
+    "rmm",
+    "msp",
+    "api",
+    "typescript",
+    "sdk",
+    "api-client"
+  ],
+  "author": "Aaron Sachs",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WYRE-AI/node-kaseya-vsax.git"
+  },
+  "bugs": {
+    "url": "https://github.com/WYRE-AI/node-kaseya-vsax/issues"
+  },
+  "homepage": "https://github.com/WYRE-AI/node-kaseya-vsax#readme",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@semantic-release/github": "^12.0.10",
+    "@types/node": "^26.6.2",
+    "@vitest/coverage-v8": "^5.0.2",
+    "eslint": "^10.11.0",
+    "globals": "^17.12.0",
+    "msw": "^2.15.0",
+    "semantic-release": "^25.0.9",
+    "tsup": "^8.0.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.70.1",
+    "vitest": "^5.0.2"
+  }
+}
