@@ -25,7 +25,10 @@ export interface KaseyaVsaxConfig {
   tokenSecret: string;
   /** Per-request timeout in ms (default 30000). */
   timeoutMs?: number;
-  /** Retries for 429 and 502/503/504 only (default 2). */
+  /**
+   * Max retries (default 2). 429 is retried for every method; 502/503/504 only for idempotent
+   * methods (GET, HEAD, PUT, DELETE, OPTIONS). POST fails on the first 5xx.
+   */
   maxRetries?: number;
   /** Injectable fetch (default global fetch). */
   fetch?: FetchLike;

@@ -57,6 +57,7 @@ export interface RequestOptions {
   body?: unknown;
 }
 
+const IDEMPOTENT_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 10_000;
 
@@ -251,7 +252,8 @@ export class HttpClient {
       }
 
       if (status === 502 || status === 503 || status === 504) {
-        if (attempt >= this.#cfg.maxRetries) {
+        // Non-idempotent methods may have been applied before the gateway failed: never replay them.
+        if (!IDEMPOTENT_METHODS.has(method.toUpperCase()) || attempt >= this.#cfg.maxRetries) {
           throw new KaseyaVsaxServerError(`Server error (${status})${detail}`, { ...errBase, status });
         }
         await this.#cfg.sleep(this.#backoffMs(attempt));

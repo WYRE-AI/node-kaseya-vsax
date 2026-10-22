@@ -161,7 +161,7 @@ describe('error mapping and retry policy', () => {
     const { client, sleep } = makeClient(f);
     const err = await client.devices.list({ top: 5 }).catch((e: unknown) => e as Error);
     expect(err).toBeInstanceOf(cls);
-    expect((err as KaseyaVsaxServerError).status).toBe(status);
+    expect((err as { status?: number }).status).toBe(status);
     expect(f).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
   });
@@ -278,5 +278,24 @@ describe('uses fetch exactly as injected', () => {
     const { client } = makeClient(f);
     await client.devices.list();
     expect(globalSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('5xx retries are limited to idempotent methods', () => {
+  it('POST 503 is not retried and throws ServerError', async () => {
+    const f = newFetch().mockResolvedValue(res(503));
+    const { client, sleep } = makeClient(f);
+    const err = await client.organizations.create({ Name: 'x' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KaseyaVsaxServerError);
+    expect((err as { status?: number }).status).toBe(503);
+    expect(f).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('GET 503 still retries', async () => {
+    const f = newFetch().mockResolvedValueOnce(res(503)).mockResolvedValueOnce(ok([]));
+    const { client } = makeClient(f);
+    await client.devices.list();
+    expect(f).toHaveBeenCalledTimes(2);
   });
 });

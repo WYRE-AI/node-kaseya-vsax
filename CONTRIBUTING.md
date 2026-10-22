@@ -4,6 +4,9 @@ Thanks for your interest in contributing to `node-kaseya-vsax`.
 
 ## Development setup
 
+The published package runs on Node >= 22.0.0, but development requires **Node >= 22.14.0**
+(vitest 5, eslint 10, semantic-release 25). `devEngines` in `package.json` enforces this.
+
 ```bash
 git clone https://github.com/WYRE-AI/node-kaseya-vsax.git
 cd node-kaseya-vsax

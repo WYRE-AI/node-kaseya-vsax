@@ -3,6 +3,9 @@
 Fully-typed Node.js/TypeScript client for the **Kaseya VSA X (VSA 10) REST API v3**
 (`https://<tenant>.vsax.net/api/v3`). Zero runtime dependencies (uses global `fetch`, Node >= 22).
 
+> Runtime requires Node >= 22.0.0; **development** (tests, lint, release tooling: vitest 5, eslint 10,
+> semantic-release 25) requires Node >= 22.14.0.
+
 > **VSA 9 vs VSA X.** VSA X (VSA 10) is a different product with a different API (v3, Basic
 > `TokenId:TokenSecret` auth). For the classic on-prem VSA 9 REST API use
 > [`@wyre-ai/node-kaseya-vsa`](https://github.com/WYRE-AI/node-kaseya-vsa) (WYRE-AI/node-kaseya-vsa).
@@ -55,7 +58,7 @@ Resources: `devices`, `assets`, `automation.{scripts,tasks,workflows}`, `notific
 | `serverUrl` | required | Normalized to `https://<host>/api/v3` |
 | `tokenId` / `tokenSecret` | required | Trimmed; no CR/LF; no `:` in `tokenId` |
 | `timeoutMs` | `30000` | Per attempt; `KaseyaVsaxTimeoutError` |
-| `maxRetries` | `2` | Only for 429 and 502/503/504 |
+| `maxRetries` | `2` | 429 (all methods); 502/503/504 (idempotent methods only) |
 | `maxRetryAfterSeconds` | `60` | Larger `Retry-After` throws instead of sleeping |
 | `authFailureThreshold` / `authCooldownMs` | `2` / `300000` | Auth circuit breaker |
 | `maxPages` | `1000` | Pagination cap |
@@ -79,13 +82,14 @@ Resources: `devices`, `assets`, `automation.{scripts,tasks,workflows}`, `notific
   After `authFailureThreshold` (2) consecutive 401/403 responses the client throws
   `KaseyaVsaxAuthCircuitOpenError` **without calling fetch** until `client.resetAuthCircuit()` or the
   cooldown (5 min) elapses. 401/403 are never retried. A success resets the counter.
-- **Bounded retries.** No retries on other 4xx or 500 and none on timeouts/network errors.
+- **Bounded retries.** 429 is retried for all methods; 502/503/504 only for idempotent ones. No retries on other 4xx or 500 and none on timeouts/network errors.
 
 ## Pagination
 
 `list()` fetches one page. `listAll()` returns an async iterable (with `.toArray()`) that pages with
-`$top`/`$skip` (default `top` 100; most endpoints cap `$top` at 100, devices are uncapped) and stops on
-a short page. When the server returns `Meta.NextQueryLink` (TotalCount > 5000) it is followed **only** if
+`$top`/`$skip` (default `top` 100; most endpoints cap `$top` at 100, devices are uncapped) and stops
+when `Meta.TotalCount` is reached (if present) or a page is shorter than the largest page seen (servers
+may cap `$top`, so a page shorter than the requested `top` does not end iteration). When the server returns `Meta.NextQueryLink` (TotalCount > 5000) it is followed **only** if
 it is an `https` URL on exactly the configured host (no userinfo, no port) under `/api/v3/`; otherwise
 `KaseyaVsaxPaginationError`. Repeated links, empty pages that still offer a link, and more than `maxPages`
 pages also raise `KaseyaVsaxPaginationError`.
@@ -102,7 +106,8 @@ All extend `KaseyaVsaxError` (`status?`, `code`, `method`, `path`, `body`):
 
 Roughly 3600 requests/hour per token + endpoint. On 429 the client honors `Retry-After` (seconds or
 HTTP-date) and retries up to `maxRetries`; if it exceeds `maxRetryAfterSeconds` it throws
-`KaseyaVsaxRateLimitError` immediately. 502/503/504 are retried with exponential backoff + jitter.
+`KaseyaVsaxRateLimitError` immediately. 502/503/504 are retried with exponential backoff + jitter only for idempotent methods (GET, HEAD, PUT,
+DELETE, OPTIONS); a POST throws `KaseyaVsaxServerError` on the first 5xx so it is never replayed.
 `client.lastRateLimit` exposes the latest `X-RateLimit-*` values; `client.rateLimits.get()` fetches the
 server-side view.
 

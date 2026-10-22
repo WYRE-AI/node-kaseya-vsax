@@ -139,3 +139,21 @@ describe('NextQueryLink', () => {
     expect(f).toHaveBeenCalledTimes(5);
   });
 });
+
+describe('server-capped page size', () => {
+  const cappedServer = (total: number, withTotal: boolean): ReturnType<typeof newFetch> =>
+    newFetch().mockImplementation((url: string) => {
+      const skip = Number(/\$skip=(\d+)/.exec(url)?.[1] ?? 0);
+      const n = Math.max(0, Math.min(100, total - skip));
+      return Promise.resolve(ok(items(n, skip), withTotal ? { TotalCount: total } : {}));
+    });
+
+  it.each([true, false])('top 500 vs cap 100, 250 items (TotalCount=%s) returns all', async (withTotal) => {
+    const f = cappedServer(250, withTotal);
+    const { client } = makeClient(f);
+    const all = await client.devices.listAll({ top: 500 }).toArray();
+    expect(all).toHaveLength(250);
+    expect(new Set(all.map((d) => d.Identifier)).size).toBe(250);
+    expect(f).toHaveBeenCalledTimes(3);
+  });
+});

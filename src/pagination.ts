@@ -62,6 +62,7 @@ export class PaginatedIterable<T> implements AsyncIterable<T> {
     let skip = this.#params.skip ?? 0;
     let nextLink: string | undefined;
     let pages = 0;
+    let maxSeen = 0; // largest page actually returned (servers may cap $top)
 
     while (true) {
       if (pages >= maxPages) {
@@ -97,8 +98,15 @@ export class PaginatedIterable<T> implements AsyncIterable<T> {
       }
 
       if (nextLink !== undefined) return; // final page of a link chain
-      if (items.length < top) return;
+      if (items.length === 0) return;
       skip += items.length;
+      const total = env.Meta.TotalCount;
+      if (typeof total === 'number' && Number.isFinite(total)) {
+        if (skip >= total) return;
+      } else {
+        maxSeen = Math.max(maxSeen, items.length);
+        if (items.length < maxSeen) return;
+      }
     }
   }
 
