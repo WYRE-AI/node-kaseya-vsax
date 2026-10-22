@@ -4,7 +4,10 @@ import type { Asset, AssetSection } from '../types/index.js';
 import { BaseResource } from './base.js';
 
 export interface AssetListParams extends ListParams {
-  /** Sections to include (default: all but AvailableUpdates and Security). */
+  /**
+   * Sections to include. Omitted or an empty array both send nothing, so the server default applies
+   * (all sections but AvailableUpdates and Security: a heavy payload). Pass explicit sections to slim it.
+   */
   include?: readonly AssetSection[];
 }
 
@@ -23,7 +26,7 @@ export class AssetsResource extends BaseResource {
   }
 
   async get(deviceId: string, include?: readonly AssetSection[]): Promise<Asset> {
-    return this.http.request<Asset>('GET', `/assets/${pathParam(deviceId, 'id')}`, {
+    return this.http.request<Asset>('GET', `/assets/${pathParam(deviceId, 'deviceId')}`, {
       query: includeQuery(include),
     });
   }

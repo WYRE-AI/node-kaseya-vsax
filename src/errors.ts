@@ -40,6 +40,8 @@ export interface KaseyaVsaxErrorOptions {
   path?: string;
   /** Already-scrubbed upstream body excerpt. */
   body?: string;
+  /** Already-scrubbed, truncated upstream error text (no status prefix). */
+  detail?: string;
 }
 
 /** Base class for all SDK errors. */
@@ -49,6 +51,8 @@ export class KaseyaVsaxError extends Error {
   readonly method?: string;
   readonly path?: string;
   readonly body?: string;
+  /** Scrubbed, truncated upstream error text without the "Bad request (400):" style prefix. */
+  readonly detail?: string;
 
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message);
@@ -58,6 +62,7 @@ export class KaseyaVsaxError extends Error {
     if (options.method !== undefined) this.method = options.method;
     if (options.path !== undefined) this.path = stripQuery(options.path);
     if (options.body !== undefined) this.body = options.body.slice(0, MAX_ERROR_BODY_LENGTH + 20);
+    if (options.detail !== undefined && options.detail !== '') this.detail = options.detail;
   }
 }
 
@@ -138,7 +143,7 @@ export class KaseyaVsaxAuthCircuitOpenError extends KaseyaVsaxError {
 
   constructor(retryAfterMs: number) {
     super(
-      'Authentication circuit breaker is open after repeated 401/403 responses; ' +
+      'Authentication circuit breaker is open after repeated 401 responses; ' +
         'no request was sent. Check the token, then call resetAuthCircuit() or wait for the cooldown.',
       { code: 'AUTH_CIRCUIT_OPEN' },
     );

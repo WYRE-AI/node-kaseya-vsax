@@ -20,7 +20,7 @@ export class NotificationsResource extends BaseResource {
   }
 
   async get(id: number | string): Promise<Notification> {
-    return this.http.request<Notification>('GET', `/notifications/${pathParam(id, 'id')}`);
+    return this.http.request<Notification>('GET', `/notifications/${pathParam(id, 'notificationId')}`);
   }
 
   /** Send a notification. WRITE operation. */
@@ -30,7 +30,7 @@ export class NotificationsResource extends BaseResource {
 
   /** Delete a notification. WRITE operation. */
   async delete(id: number | string): Promise<void> {
-    return this.http.request<void>('DELETE', `/notifications/${pathParam(id, 'id')}`);
+    return this.http.request<void>('DELETE', `/notifications/${pathParam(id, 'notificationId')}`);
   }
 
   readonly webhooks = {
@@ -39,23 +39,23 @@ export class NotificationsResource extends BaseResource {
     listAll: (params?: ListParams): PaginatedIterable<NotificationWebhook> =>
       this.iterate<NotificationWebhook>('/notifications/webhooks', params),
     get: async (id: number | string): Promise<NotificationWebhook> =>
-      this.http.request<NotificationWebhook>('GET', `/notifications/webhooks/${pathParam(id, 'id')}`),
+      this.http.request<NotificationWebhook>('GET', `/notifications/webhooks/${pathParam(id, 'webhookId')}`),
     /** WRITE operation. */
     create: async (request: WebhookRequest): Promise<NotificationWebhook> =>
       this.http.request<NotificationWebhook>('POST', '/notifications/webhooks', { body: request }),
     /** WRITE operation. */
     update: async (id: number | string, request: WebhookRequest): Promise<NotificationWebhook> =>
-      this.http.request<NotificationWebhook>('PUT', `/notifications/webhooks/${pathParam(id, 'id')}`, {
+      this.http.request<NotificationWebhook>('PUT', `/notifications/webhooks/${pathParam(id, 'webhookId')}`, {
         body: request,
       }),
     /** WRITE operation. */
     delete: async (id: number | string): Promise<void> =>
-      this.http.request<void>('DELETE', `/notifications/webhooks/${pathParam(id, 'id')}`),
+      this.http.request<void>('DELETE', `/notifications/webhooks/${pathParam(id, 'webhookId')}`),
     /** Re-generate the webhook secret key. WRITE operation. */
     regenerateSecret: async (id: number | string): Promise<NotificationWebhook> =>
       this.http.request<NotificationWebhook>(
         'POST',
-        `/notifications/webhooks/${pathParam(id, 'id')}/regeneratesecretkey`,
+        `/notifications/webhooks/${pathParam(id, 'webhookId')}/regeneratesecretkey`,
       ),
   };
 }

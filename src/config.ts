@@ -14,6 +14,49 @@ export const API_PATH_PREFIX = '/api/v3';
 const LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const IPV4_RE = /^\d{1,3}(\.\d{1,3}){3}$/;
 
+/** Breaker state for one credential. */
+export interface AuthCircuitState {
+  /** Consecutive 401 count. */
+  failures: number;
+  /** Timestamp (ms) at which the circuit tripped, if open. */
+  trippedAt?: number;
+}
+
+/**
+ * Storage for auth circuit breaker state, shareable across client instances. Keys are
+ * `${host}:${sha256hex(tokenId)}`; they never contain the token id or secret.
+ */
+export interface AuthCircuitStore {
+  get(key: string): AuthCircuitState | undefined;
+  set(key: string, state: AuthCircuitState): void;
+  delete(key: string): void;
+}
+
+export const AUTH_CIRCUIT_STORE_MAX_ENTRIES = 10_000;
+
+/** In-memory {@link AuthCircuitStore} bounded to 10k entries (oldest-inserted evicted first). */
+export function createAuthCircuitStore(): AuthCircuitStore {
+  const map = new Map<string, AuthCircuitState>();
+  return {
+    get: (key): AuthCircuitState | undefined => {
+      const s = map.get(key);
+      return s === undefined ? undefined : { ...s };
+    },
+    set: (key, state): void => {
+      map.delete(key); // re-insert so the most recently written entry is evicted last
+      map.set(key, { ...state });
+      while (map.size > AUTH_CIRCUIT_STORE_MAX_ENTRIES) {
+        const oldest = map.keys().next();
+        if (oldest.done === true) break;
+        map.delete(oldest.value);
+      }
+    },
+    delete: (key): void => {
+      map.delete(key);
+    },
+  };
+}
+
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
 export interface KaseyaVsaxConfig {
@@ -42,12 +85,20 @@ export interface KaseyaVsaxConfig {
   allowedHostSuffix?: string;
   /** Largest Retry-After (seconds) the client will sleep for (default 60). */
   maxRetryAfterSeconds?: number;
-  /** Consecutive 401/403 responses that trip the circuit breaker (default 2). */
+  /**
+   * Consecutive 401 responses that trip the circuit breaker (default 2). 403 never counts: it is a
+   * per-resource permission failure, so it throws KaseyaVsaxForbiddenError without affecting the circuit.
+   */
   authFailureThreshold?: number;
   /** Circuit breaker cooldown in ms (default 300000). */
   authCooldownMs?: number;
   /** Maximum pages an iterator will fetch (default 1000). */
   maxPages?: number;
+  /**
+   * Share breaker state across client instances (keyed by host + hashed tokenId). Default: state is
+   * private to each client.
+   */
+  authCircuitStore?: AuthCircuitStore;
 }
 
 /** Fully-resolved, validated configuration. Holds secrets: never expose it. */
@@ -66,6 +117,7 @@ export interface ResolvedConfig {
   authFailureThreshold: number;
   authCooldownMs: number;
   maxPages: number;
+  authCircuitStore?: AuthCircuitStore;
 }
 
 function normalizeSuffix(suffix: string): string {
@@ -190,7 +242,7 @@ export function resolveConfig(config: KaseyaVsaxConfig): ResolvedConfig {
   const fetchImpl = config.fetch ?? globalThis.fetch;
   if (typeof fetchImpl !== 'function') throw new KaseyaVsaxConfigError('No fetch implementation available');
 
-  return {
+  const resolved: ResolvedConfig = {
     host,
     baseUrl: `https://${host}${API_PATH_PREFIX}`,
     tokenId,
@@ -206,4 +258,12 @@ export function resolveConfig(config: KaseyaVsaxConfig): ResolvedConfig {
     authCooldownMs: positiveInt(config.authCooldownMs, 300_000, 'authCooldownMs', 0),
     maxPages: positiveInt(config.maxPages, 1000, 'maxPages'),
   };
+  if (config.authCircuitStore !== undefined) {
+    const st = config.authCircuitStore;
+    if (typeof st.get !== 'function' || typeof st.set !== 'function' || typeof st.delete !== 'function') {
+      throw new KaseyaVsaxConfigError('authCircuitStore must implement get, set and delete');
+    }
+    resolved.authCircuitStore = st;
+  }
+  return resolved;
 }

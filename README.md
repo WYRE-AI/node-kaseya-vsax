@@ -60,7 +60,8 @@ Resources: `devices`, `assets`, `automation.{scripts,tasks,workflows}`, `notific
 | `timeoutMs` | `30000` | Per attempt; `KaseyaVsaxTimeoutError` |
 | `maxRetries` | `2` | 429 (all methods); 502/503/504 (idempotent methods only) |
 | `maxRetryAfterSeconds` | `60` | Larger `Retry-After` throws instead of sleeping |
-| `authFailureThreshold` / `authCooldownMs` | `2` / `300000` | Auth circuit breaker |
+| `authFailureThreshold` / `authCooldownMs` | `2` / `300000` | Auth circuit breaker (401 only) |
+| `authCircuitStore` | per-instance | `createAuthCircuitStore()` to share breaker state across clients (keyed by host + SHA-256 of tokenId) |
 | `maxPages` | `1000` | Pagination cap |
 | `allowedHostSuffix` | `.vsax.net` | Exactly one label before the suffix |
 | `fetch`, `sleep`, `now`, `random` | globals | Injectable for tests |
@@ -79,9 +80,14 @@ Resources: `devices`, `assets`, `automation.{scripts,tasks,workflows}`, `notific
   scrubbed and truncated to 500 characters; `path` has no query string. Credentials are held in private
   `#` fields, not on enumerable client state.
 - **Auth circuit breaker.** VSA X blocks source IPs that make too many failed requests (100/min, 2000/hr).
-  After `authFailureThreshold` (2) consecutive 401/403 responses the client throws
-  `KaseyaVsaxAuthCircuitOpenError` **without calling fetch** until `client.resetAuthCircuit()` or the
-  cooldown (5 min) elapses. 401/403 are never retried. A success resets the counter.
+  After `authFailureThreshold` (2) consecutive **401** responses the client throws
+  `KaseyaVsaxAuthCircuitOpenError` (with `retryAfterMs`) **without calling fetch** until `client.resetAuthCircuit()` or the
+  cooldown (5 min) elapses. 403 does not count: it throws `KaseyaVsaxForbiddenError` and leaves the circuit
+  closed. 401/403 are never retried. A success resets the counter. Pass a shared `authCircuitStore`
+  (`createAuthCircuitStore()`, bounded to 10k entries) so several client instances using the same
+  host + token id share one breaker; keys contain only a hash of the token id.
+- **Error `detail`.** Every `KaseyaVsaxError` built from an upstream response exposes `detail`: the scrubbed,
+  truncated upstream text without the `Bad request (400):` style prefix that `message` carries.
 - **Bounded retries.** 429 is retried for all methods; 502/503/504 only for idempotent ones. No retries on other 4xx or 500 and none on timeouts/network errors.
 
 ## Pagination

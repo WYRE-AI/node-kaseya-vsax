@@ -28,11 +28,11 @@ export class CustomFieldsResource extends BaseResource {
   }
 
   async get(id: number | string): Promise<CustomField> {
-    return this.http.request<CustomField>('GET', `/customfields/${pathParam(id, 'id')}`);
+    return this.http.request<CustomField>('GET', `/customfields/${pathParam(id, 'customFieldId')}`);
   }
 
   async usage(id: number | string): Promise<CustomFieldUsage> {
-    return this.http.request<CustomFieldUsage>('GET', `/customfields/${pathParam(id, 'id')}/usage`);
+    return this.http.request<CustomFieldUsage>('GET', `/customfields/${pathParam(id, 'customFieldId')}/usage`);
   }
 
   /** WRITE operation. */
@@ -77,18 +77,18 @@ export class ScopesResource extends BaseResource {
   }
 
   async get(id: number | string): Promise<Scope> {
-    return this.http.request<Scope>('GET', `/scopes/${pathParam(id, 'id')}`);
+    return this.http.request<Scope>('GET', `/scopes/${pathParam(id, 'scopeId')}`);
   }
 
   async usage(id: number | string): Promise<ScopeUsage> {
-    return this.http.request<ScopeUsage>('GET', `/scopes/${pathParam(id, 'id')}/usage`);
+    return this.http.request<ScopeUsage>('GET', `/scopes/${pathParam(id, 'scopeId')}/usage`);
   }
 }
 
 /** Patch management (`/patchmanagement`). */
 export class PatchManagementResource extends BaseResource {
   async getPolicy(id: number | string): Promise<PatchManagementPolicy> {
-    return this.http.request<PatchManagementPolicy>('GET', `/patchmanagement/policies/${pathParam(id, 'id')}`);
+    return this.http.request<PatchManagementPolicy>('GET', `/patchmanagement/policies/${pathParam(id, 'policyId')}`);
   }
 
   async getGlobalRules(): Promise<PatchManagementGlobalRules> {
@@ -101,7 +101,7 @@ export class EndpointProtectionResource extends BaseResource {
   async getPolicy(id: number | string): Promise<EndpointProtectionPolicy> {
     return this.http.request<EndpointProtectionPolicy>(
       'GET',
-      `/endpointprotection/policies/${pathParam(id, 'id')}`,
+      `/endpointprotection/policies/${pathParam(id, 'policyId')}`,
     );
   }
 }

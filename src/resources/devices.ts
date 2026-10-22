@@ -28,11 +28,11 @@ export class DevicesResource extends BaseResource {
   }
 
   async get(id: string): Promise<Device> {
-    return this.http.request<Device>('GET', `/devices/${pathParam(id, 'id')}`);
+    return this.http.request<Device>('GET', `/devices/${pathParam(id, 'deviceId')}`);
   }
 
   async notifications(id: string, params?: ListParams): Promise<DeviceNotification[]> {
-    return this.getList<DeviceNotification>(`/devices/${pathParam(id, 'id')}/notifications`, params);
+    return this.getList<DeviceNotification>(`/devices/${pathParam(id, 'deviceId')}/notifications`, params);
   }
 
   async antivirus(id: string): Promise<DeviceAntivirus> {
@@ -40,11 +40,11 @@ export class DevicesResource extends BaseResource {
   }
 
   async customFields(id: string): Promise<DeviceCustomField[]> {
-    return this.http.request<DeviceCustomField[]>('GET', `/devices/${pathParam(id, 'id')}/customfields`);
+    return this.http.request<DeviceCustomField[]>('GET', `/devices/${pathParam(id, 'deviceId')}/customfields`);
   }
 
   async appliedPolicies(id: string): Promise<DeviceAppliedPolicy[]> {
-    return this.http.request<DeviceAppliedPolicy[]>('GET', `/devices/${pathParam(id, 'id')}/appliedpolicies`);
+    return this.http.request<DeviceAppliedPolicy[]>('GET', `/devices/${pathParam(id, 'deviceId')}/appliedpolicies`);
   }
 
   /** Move a device to another group. WRITE operation. */

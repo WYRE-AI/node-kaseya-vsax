@@ -103,7 +103,7 @@ describe('secret scrubbing', () => {
     const { client } = makeClient(f);
     const err = (await client.devices.get('zz').catch((e: unknown) => e)) as KaseyaVsaxError;
     expect(Object.keys(JSON.parse(JSON.stringify(err)) as object).sort()).toEqual(
-      ['body', 'code', 'method', 'name', 'path', 'status'].sort(),
+      ['body', 'code', 'detail', 'method', 'name', 'path', 'status'].sort(),
     );
   });
 });

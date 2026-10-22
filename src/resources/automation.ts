@@ -29,12 +29,12 @@ export class ScriptsResource extends BaseResource {
   }
 
   async get(id: string): Promise<Script> {
-    return this.http.request<Script>('GET', `/automation/scripts/${pathParam(id, 'id')}`);
+    return this.http.request<Script>('GET', `/automation/scripts/${pathParam(id, 'scriptId')}`);
   }
 
   /** Run a script on an online device. WRITE operation. */
   async run(id: string, request: RunScriptRequest): Promise<RunResult> {
-    return this.http.request<RunResult>('POST', `/automation/scripts/${pathParam(id, 'id')}/run`, {
+    return this.http.request<RunResult>('POST', `/automation/scripts/${pathParam(id, 'scriptId')}/run`, {
       body: request,
     });
   }
@@ -65,12 +65,12 @@ export class TasksResource extends BaseResource {
   }
 
   async get(id: number | string): Promise<Task> {
-    return this.http.request<Task>('GET', `/automation/tasks/${pathParam(id, 'id')}`);
+    return this.http.request<Task>('GET', `/automation/tasks/${pathParam(id, 'taskId')}`);
   }
 
   /** Run a task. WRITE operation. */
   async run(id: number | string, request: RunTaskRequest = {}): Promise<RunResult> {
-    return this.http.request<RunResult>('POST', `/automation/tasks/${pathParam(id, 'id')}/run`, {
+    return this.http.request<RunResult>('POST', `/automation/tasks/${pathParam(id, 'taskId')}/run`, {
       body: request,
     });
   }
@@ -120,12 +120,12 @@ export class WorkflowsResource extends BaseResource {
   }
 
   async get(id: number | string): Promise<Workflow> {
-    return this.http.request<Workflow>('GET', `/automation/workflows/${pathParam(id, 'id')}`);
+    return this.http.request<Workflow>('GET', `/automation/workflows/${pathParam(id, 'workflowId')}`);
   }
 
   /** Run a workflow. WRITE operation. */
   async run(id: number | string, request: RunWorkflowRequest = {}): Promise<RunResult> {
-    return this.http.request<RunResult>('POST', `/automation/workflows/${pathParam(id, 'id')}/run`, {
+    return this.http.request<RunResult>('POST', `/automation/workflows/${pathParam(id, 'workflowId')}/run`, {
       body: request,
     });
   }

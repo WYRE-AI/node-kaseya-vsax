@@ -3,7 +3,8 @@
  * circuit breaker, rate-limit tracking, envelope unwrapping and error mapping.
  */
 
-import type { ResolvedConfig } from './config.js';
+import { createHash } from 'node:crypto';
+import type { AuthCircuitState, ResolvedConfig } from './config.js';
 import { API_PATH_PREFIX } from './config.js';
 import {
   KaseyaVsaxAuthCircuitOpenError,
@@ -138,8 +139,8 @@ export class HttpClient {
   readonly #secrets: readonly string[];
   readonly #cfg: Omit<ResolvedConfig, 'tokenId' | 'tokenSecret'>;
 
-  #authFailures = 0;
-  #trippedAt: number | undefined;
+  readonly #circuitKey: string | undefined;
+  #localCircuit: AuthCircuitState = { failures: 0 };
   #lastRateLimit: RateLimitInfo | undefined;
 
   constructor(config: ResolvedConfig) {
@@ -150,6 +151,11 @@ export class HttpClient {
     this.#cfg = rest;
     this.#baseUrl = rest.baseUrl;
     this.host = rest.host;
+    // Key is host + SHA-256 of the token id: the raw id never reaches the shared store.
+    this.#circuitKey =
+      rest.authCircuitStore === undefined
+        ? undefined
+        : `${rest.host}:${createHash('sha256').update(tokenId, 'utf8').digest('hex')}`;
   }
 
   /** Most recent rate-limit headers observed. */
@@ -167,24 +173,41 @@ export class HttpClient {
   }
 
   resetAuthCircuit(): void {
-    this.#authFailures = 0;
-    this.#trippedAt = undefined;
+    this.#setCircuit({ failures: 0 });
+  }
+
+  #getCircuit(): AuthCircuitState {
+    if (this.#circuitKey === undefined || this.#cfg.authCircuitStore === undefined) return this.#localCircuit;
+    return this.#cfg.authCircuitStore.get(this.#circuitKey) ?? { failures: 0 };
+  }
+
+  #setCircuit(state: AuthCircuitState): void {
+    if (this.#circuitKey === undefined || this.#cfg.authCircuitStore === undefined) {
+      this.#localCircuit = state;
+    } else if (state.failures === 0 && state.trippedAt === undefined) {
+      this.#cfg.authCircuitStore.delete(this.#circuitKey);
+    } else {
+      this.#cfg.authCircuitStore.set(this.#circuitKey, state);
+    }
   }
 
   /** Returns remaining open time in ms (0 when closed). Moves to half-open after cooldown. */
   #circuitRemainingMs(): number {
-    if (this.#trippedAt === undefined) return 0;
-    const remaining = this.#trippedAt + this.#cfg.authCooldownMs - this.#cfg.now();
+    const state = this.#getCircuit();
+    if (state.trippedAt === undefined) return 0;
+    const remaining = state.trippedAt + this.#cfg.authCooldownMs - this.#cfg.now();
     if (remaining > 0) return remaining;
-    // Cooldown elapsed: half-open. A single further auth failure re-trips.
-    this.#trippedAt = undefined;
-    this.#authFailures = Math.max(0, this.#cfg.authFailureThreshold - 1);
+    // Cooldown elapsed: half-open. A single further 401 re-trips.
+    this.#setCircuit({ failures: Math.max(0, this.#cfg.authFailureThreshold - 1) });
     return 0;
   }
 
+  /** Only 401 counts: 403 is a per-resource permission failure and must not trip the global circuit. */
   #recordAuthFailure(): void {
-    this.#authFailures += 1;
-    if (this.#authFailures >= this.#cfg.authFailureThreshold) this.#trippedAt = this.#cfg.now();
+    const failures = this.#getCircuit().failures + 1;
+    this.#setCircuit(
+      failures >= this.#cfg.authFailureThreshold ? { failures, trippedAt: this.#cfg.now() } : { failures },
+    );
   }
 
   /** Perform a request and return the unwrapped `Data`. */
@@ -220,19 +243,20 @@ export class HttpClient {
       const status = response.status;
 
       if (status >= 200 && status < 300) {
-        this.#authFailures = 0;
+        if (this.#getCircuit().failures !== 0) this.#setCircuit({ failures: 0 });
         return this.#parseSuccess<T>(text, base);
       }
 
       const errBase: KaseyaVsaxErrorOptions = { ...base, body: sanitizeBody(text, this.#secrets) };
-      const detail = this.#describe(text);
+      const detailText = this.#detailText(text);
+      const detail = detailText === '' ? '' : `: ${detailText}`;
+      if (detailText !== '') errBase.detail = detailText;
 
-      if (status === 401 || status === 403) {
+      if (status === 401) {
         this.#recordAuthFailure();
-        throw status === 401
-          ? new KaseyaVsaxAuthenticationError(`Authentication failed (401)${detail}`, errBase)
-          : new KaseyaVsaxForbiddenError(`Forbidden (403)${detail}`, errBase);
+        throw new KaseyaVsaxAuthenticationError(`Authentication failed (401)${detail}`, errBase);
       }
+      if (status === 403) throw new KaseyaVsaxForbiddenError(`Forbidden (403)${detail}`, errBase);
 
       if (status === 429) {
         const retryAfter = this.#parseRetryAfter(response.headers);
@@ -334,8 +358,8 @@ export class HttpClient {
     return { Data: json as T, Meta: {} };
   }
 
-  /** Best-effort, scrubbed, truncated message from an error body. */
-  #describe(text: string): string {
+  /** Best-effort, scrubbed, truncated message from an error body (no status prefix). */
+  #detailText(text: string): string {
     if (text.trim() === '') return '';
     let msg = text;
     try {
@@ -350,7 +374,7 @@ export class HttpClient {
     } catch {
       // keep raw text
     }
-    return `: ${sanitizeBody(msg, this.#secrets)}`;
+    return sanitizeBody(msg, this.#secrets);
   }
 
   #parseRetryAfter(headers: Headers): number | undefined {
