@@ -8,7 +8,8 @@ export interface CustomField {
   DefaultValue?: string;
   GlobalValue?: string;
   IsReadOnly?: boolean;
-  Context?: string[];
+  /** Plural `Contexts` matches the live API response. */
+  Contexts?: string[];
   ExpirationDate?: string;
   CreatedAt?: string;
 }

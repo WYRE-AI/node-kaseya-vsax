@@ -8,9 +8,11 @@ export interface AccessItem {
 export interface Organization {
   Id: number;
   Name?: string;
-  Type?: Loose<'Internal' | 'Customer'>;
+  /** Lowercase `type` matches the live API response (the request body uses `Type`). */
+  type?: Loose<'Internal' | 'Customer'>;
   HasCustomFields?: boolean;
-  PsaMappingId?: number;
+  /** Name/casing matches the live API (it returns `PsaMappingType`, not `PsaMappingId`). */
+  PsaMappingType?: string | null;
   PsaIntegrationType?: string | null;
   PsaQueueName?: string;
   PsaNotificationType?: string;
@@ -68,6 +70,8 @@ export interface Group {
   Notes?: string;
   HasCustomFields?: boolean;
   PsaMappingId?: number;
+  /** Name/casing matches the live API. */
+  PsaMappingType?: string | null;
   PsaIntegrationType?: string | null;
 }
 
