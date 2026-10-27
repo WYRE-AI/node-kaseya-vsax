@@ -8,7 +8,9 @@
 
 import { KaseyaVsaxConfigError } from './errors.js';
 
+/** Host suffix accepted by default for tenant hosts. */
 export const DEFAULT_ALLOWED_HOST_SUFFIX = '.vsax.net';
+/** Path prefix of the REST API. */
 export const API_PATH_PREFIX = '/api/v3';
 
 const LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
@@ -20,6 +22,11 @@ export interface AuthCircuitState {
   failures: number;
   /** Timestamp (ms) at which the circuit tripped, if open. */
   trippedAt?: number;
+  /**
+   * Timestamp (ms) until which a half-open probe request holds the circuit. While it is in the future,
+   * other callers are rejected; once it passes (e.g. the prober crashed) a new probe may be claimed.
+   */
+  probeUntil?: number;
 }
 
 /**
@@ -27,11 +34,15 @@ export interface AuthCircuitState {
  * `${host}:${sha256hex(tokenId)}`; they never contain the token id or secret.
  */
 export interface AuthCircuitStore {
+  /** Read the state for a key. */
   get(key: string): AuthCircuitState | undefined;
+  /** Write the state for a key. */
   set(key: string, state: AuthCircuitState): void;
+  /** Remove the state for a key. */
   delete(key: string): void;
 }
 
+/** Maximum entries kept by the in-memory circuit store. */
 export const AUTH_CIRCUIT_STORE_MAX_ENTRIES = 10_000;
 
 /** In-memory {@link AuthCircuitStore} bounded to 10k entries (oldest-inserted evicted first). */
@@ -57,8 +68,10 @@ export function createAuthCircuitStore(): AuthCircuitStore {
   };
 }
 
+/** Signature of the injectable `fetch` implementation. */
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
+/** User-facing client configuration. */
 export interface KaseyaVsaxConfig {
   /** Tenant host or URL, e.g. `acme.vsax.net` or `https://acme.vsax.net/api/v3`. */
   serverUrl: string;

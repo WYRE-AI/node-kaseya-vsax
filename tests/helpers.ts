@@ -1,5 +1,6 @@
-import { vi, type Mock } from 'vitest';
-import { KaseyaVsaxClient, type KaseyaVsaxConfig } from '../src/index.js';
+import { inspect } from 'node:util';
+import { expect, vi, type Mock } from 'vitest';
+import { KaseyaVsaxClient, type KaseyaVsaxConfig, type KaseyaVsaxError } from '../src/index.js';
 
 export const TOKEN_ID = 'tok-id-ABC123';
 export const TOKEN_SECRET = 's3cr3t-XYZ789';
@@ -43,4 +44,15 @@ export function call(fetchMock: FetchMock, n = 0): { url: string; init: RequestI
   const c = fetchMock.mock.calls[n];
   if (!c) throw new Error(`no fetch call #${n}`);
   return { url: c[0], init: c[1] ?? {} };
+}
+
+/** Assert an error exposes no credential material on any surface (message, stack, JSON, inspect). */
+export function assertClean(err: unknown): void {
+  const e = err as KaseyaVsaxError;
+  const blobs = [e.message, e.stack ?? '', JSON.stringify(e), inspect(e, { depth: 10, showHidden: true })];
+  for (const blob of blobs) {
+    for (const bad of [TOKEN_ID, TOKEN_SECRET, CREDENTIAL_B64, `Basic ${CREDENTIAL_B64}`, 'Authorization:', 'Authorization=']) {
+      expect(blob).not.toContain(bad);
+    }
+  }
 }

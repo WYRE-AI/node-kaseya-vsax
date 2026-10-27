@@ -1,23 +1,16 @@
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import {
+  KaseyaVsaxAuthCircuitOpenError,
   KaseyaVsaxClient,
   KaseyaVsaxError,
+  KaseyaVsaxRedirectError,
+  KaseyaVsaxTimeoutError,
   MAX_ERROR_BODY_LENGTH,
   scrubSecrets,
   type KaseyaVsaxConfig,
 } from '../../src/index.js';
-import { CREDENTIAL_B64, TOKEN_ID, TOKEN_SECRET, makeClient, newFetch, res } from '../helpers.js';
-
-function assertClean(err: unknown): void {
-  const e = err as KaseyaVsaxError;
-  const blobs = [e.message, e.stack ?? '', JSON.stringify(e), inspect(e, { depth: 10, showHidden: true })];
-  for (const blob of blobs) {
-    for (const bad of [TOKEN_ID, TOKEN_SECRET, CREDENTIAL_B64, `Basic ${CREDENTIAL_B64}`, 'Authorization:', 'Authorization=']) {
-      expect(blob).not.toContain(bad);
-    }
-  }
-}
+import { CREDENTIAL_B64, TOKEN_ID, TOKEN_SECRET, assertClean, makeClient, newFetch, res } from '../helpers.js';
 
 describe('secret scrubbing', () => {
   it('scrubSecrets removes every occurrence, longest first', () => {
@@ -72,10 +65,35 @@ describe('secret scrubbing', () => {
     assertClean(await client.devices.list().catch((e: unknown) => e));
   });
 
-  it('timeout, redirect and circuit errors are clean', async () => {
+  it('redirect errors are clean', async () => {
     const f = newFetch().mockResolvedValue(res(302, undefined, { Location: 'https://x/' }));
     const { client } = makeClient(f);
-    assertClean(await client.devices.list().catch((e: unknown) => e));
+    const err = await client.devices.list().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KaseyaVsaxRedirectError);
+    assertClean(err);
+  });
+
+  it('timeout errors are clean', async () => {
+    const f = newFetch().mockImplementation(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+        }),
+    );
+    const { client } = makeClient(f, { timeoutMs: 20 });
+    const err = await client.devices.list().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KaseyaVsaxTimeoutError);
+    assertClean(err);
+  });
+
+  it('circuit-open errors are clean', async () => {
+    const f = newFetch().mockImplementation(() => Promise.resolve(res(401)));
+    const { client } = makeClient(f);
+    await client.devices.list().catch(() => undefined);
+    await client.devices.list().catch(() => undefined);
+    const err = await client.devices.list().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KaseyaVsaxAuthCircuitOpenError);
+    assertClean(err);
   });
 
   it('malformed 2xx JSON does not leak credentials', async () => {

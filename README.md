@@ -83,7 +83,12 @@ Resources: `devices`, `assets`, `automation.{scripts,tasks,workflows}`, `notific
   After `authFailureThreshold` (2) consecutive **401** responses the client throws
   `KaseyaVsaxAuthCircuitOpenError` (with `retryAfterMs`) **without calling fetch** until `client.resetAuthCircuit()` or the
   cooldown (5 min) elapses. 403 does not count: it throws `KaseyaVsaxForbiddenError` and leaves the circuit
-  closed. 401/403 are never retried. A success resets the counter. Pass a shared `authCircuitStore`
+  closed. 401/403 are never retried. A success resets the counter. After the cooldown the circuit is
+  **half-open and admits exactly one probe request**: concurrent callers (including other clients sharing the
+  store) get `KaseyaVsaxAuthCircuitOpenError` until the probe finishes. A 2xx closes the circuit, a 401
+  re-trips it for a new cooldown, and any other outcome (other HTTP error, network error, timeout) releases the
+  probe so the next caller can probe. The probe is leased for `timeoutMs` plus a 1s margin (renewed to cover any retry
+  backoff), so a crashed probe cannot wedge the circuit. Pass a shared `authCircuitStore`
   (`createAuthCircuitStore()`, bounded to 10k entries) so several client instances using the same
   host + token id share one breaker; keys contain only a hash of the token id.
 - **Error `detail`.** Every `KaseyaVsaxError` built from an upstream response exposes `detail`: the scrubbed,

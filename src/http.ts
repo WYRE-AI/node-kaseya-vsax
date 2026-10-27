@@ -24,7 +24,9 @@ import {
   type KaseyaVsaxErrorOptions,
 } from './errors.js';
 
+/** Allowed query parameter value. */
 export type QueryValue = string | number | boolean | undefined;
+/** Query parameters (undefined values are skipped). */
 export type QueryParams = Record<string, QueryValue>;
 
 /** Response envelope metadata. */
@@ -35,6 +37,7 @@ export interface ResponseMeta {
   [key: string]: unknown;
 }
 
+/** API response envelope. */
 export interface Envelope<T> {
   Data: T;
   Meta: ResponseMeta;
@@ -53,6 +56,7 @@ export interface RateLimitInfo {
   receivedAt: number;
 }
 
+/** Per-request query and body options. */
 export interface RequestOptions {
   query?: QueryParams;
   body?: unknown;
@@ -61,6 +65,8 @@ export interface RequestOptions {
 const IDEMPOTENT_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 const BACKOFF_BASE_MS = 500;
 const BACKOFF_MAX_MS = 10_000;
+/** Added to the request timeout to size a half-open probe lease. */
+const PROBE_LEASE_MARGIN_MS = 1_000;
 
 /**
  * Validate and encode a single path parameter. Rejects empty values, `.`/`..`
@@ -143,6 +149,7 @@ export class HttpClient {
   #localCircuit: AuthCircuitState = { failures: 0 };
   #lastRateLimit: RateLimitInfo | undefined;
 
+  /** Create an HTTP client from resolved configuration. */
   constructor(config: ResolvedConfig) {
     const { tokenId, tokenSecret, ...rest } = config;
     const credential = Buffer.from(`${tokenId}:${tokenSecret}`, 'utf8').toString('base64');
@@ -172,6 +179,7 @@ export class HttpClient {
     return this.#circuitRemainingMs() > 0;
   }
 
+  /** Close the auth circuit breaker, clearing any open state and live probe. */
   resetAuthCircuit(): void {
     this.#setCircuit({ failures: 0 });
   }
@@ -191,15 +199,61 @@ export class HttpClient {
     }
   }
 
-  /** Returns remaining open time in ms (0 when closed). Moves to half-open after cooldown. */
+  /** Remaining open time in ms (cooldown, or a live half-open probe lease); 0 when closed. Never mutates state. */
   #circuitRemainingMs(): number {
     const state = this.#getCircuit();
     if (state.trippedAt === undefined) return 0;
-    const remaining = state.trippedAt + this.#cfg.authCooldownMs - this.#cfg.now();
-    if (remaining > 0) return remaining;
-    // Cooldown elapsed: half-open. A single further 401 re-trips.
-    this.#setCircuit({ failures: Math.max(0, this.#cfg.authFailureThreshold - 1) });
+    const now = this.#cfg.now();
+    const cooldown = state.trippedAt + this.#cfg.authCooldownMs - now;
+    if (cooldown > 0) return cooldown;
+    if (state.probeUntil !== undefined && state.probeUntil > now) return state.probeUntil - now;
     return 0;
+  }
+
+  /**
+   * Admit a caller. After the cooldown exactly one caller claims the half-open probe (returned as `lease`);
+   * others are told to wait until the probe lease ends.
+   */
+  #admit(): { remaining: number; lease?: number } {
+    const remaining = this.#circuitRemainingMs();
+    if (remaining > 0) return { remaining };
+    const state = this.#getCircuit();
+    if (state.trippedAt === undefined) return { remaining: 0 };
+    const lease = this.#cfg.now() + this.#cfg.timeoutMs + PROBE_LEASE_MARGIN_MS;
+    this.#setCircuit({
+      failures: Math.max(0, this.#cfg.authFailureThreshold - 1),
+      trippedAt: state.trippedAt,
+      probeUntil: lease,
+    });
+    return { remaining: 0, lease };
+  }
+
+  /**
+   * Extend a held probe lease (by `extraMs` plus one request timeout) so retry backoff cannot let a second probe in.
+   * Returns false (ownership lost) if the lease was reset or claimed by another caller meanwhile.
+   */
+  #renewProbe(lease: number, probe: { lease?: number }, extraMs = 0): boolean {
+    const state = this.#getCircuit();
+    if (state.probeUntil !== lease) return false;
+    const renewed = this.#cfg.now() + extraMs + this.#cfg.timeoutMs + PROBE_LEASE_MARGIN_MS;
+    this.#setCircuit({ ...state, probeUntil: renewed });
+    probe.lease = renewed;
+    return true;
+  }
+
+  /** Sleep before a retry; a probe holder first extends its lease to cover the sleep plus the next attempt. */
+  async #probeSafeSleep(ms: number, probe: { lease?: number }): Promise<void> {
+    if (probe.lease !== undefined && !this.#renewProbe(probe.lease, probe, ms)) probe.lease = undefined;
+    await this.#cfg.sleep(ms);
+  }
+
+  /** Give up a probe without a verdict so the next caller can probe (no-op if the probe already resolved). */
+  #releaseProbe(lease: number): void {
+    const state = this.#getCircuit();
+    if (state.probeUntil !== lease) return;
+    const released: AuthCircuitState = { failures: state.failures };
+    if (state.trippedAt !== undefined) released.trippedAt = state.trippedAt;
+    this.#setCircuit(released);
   }
 
   /** Only 401 counts: 403 is a per-resource permission failure and must not trip the global circuit. */
@@ -234,16 +288,38 @@ export class HttpClient {
 
   async #execute<T>(method: string, url: string, path: string, body: unknown): Promise<Envelope<T>> {
     const base: KaseyaVsaxErrorOptions = { method, path };
+    const probe: { lease?: number } = {}; // lease is set while this call holds the half-open probe
+    try {
+      return await this.#attempts<T>(method, url, body, base, probe);
+    } finally {
+      if (probe.lease !== undefined) this.#releaseProbe(probe.lease);
+    }
+  }
+
+  async #attempts<T>(
+    method: string,
+    url: string,
+    body: unknown,
+    base: KaseyaVsaxErrorOptions,
+    probe: { lease?: number },
+  ): Promise<Envelope<T>> {
     for (let attempt = 0; ; attempt++) {
-      const remaining = this.#circuitRemainingMs();
-      if (remaining > 0) throw new KaseyaVsaxAuthCircuitOpenError(remaining);
+      if (probe.lease !== undefined && !this.#renewProbe(probe.lease, probe)) probe.lease = undefined;
+      if (probe.lease === undefined) {
+        const admission = this.#admit();
+        if (admission.remaining > 0) throw new KaseyaVsaxAuthCircuitOpenError(admission.remaining);
+        probe.lease = admission.lease;
+      }
 
       const { response, text } = await this.#fetchOnce(method, url, body, base);
       this.#captureRateLimit(response.headers);
       const status = response.status;
 
       if (status >= 200 && status < 300) {
-        if (this.#getCircuit().failures !== 0) this.#setCircuit({ failures: 0 });
+        const state = this.#getCircuit();
+        if (state.failures !== 0 || state.trippedAt !== undefined || state.probeUntil !== undefined) {
+          this.#setCircuit({ failures: 0 });
+        }
         return this.#parseSuccess<T>(text, base);
       }
 
@@ -271,7 +347,7 @@ export class HttpClient {
           throw new KaseyaVsaxRateLimitError(`Rate limited (429)${detail}`, retryAfter, errBase);
         }
         const waitMs = retryAfter !== undefined ? Math.max(retryAfter, 1) * 1000 : this.#backoffMs(attempt);
-        await this.#cfg.sleep(waitMs);
+        await this.#probeSafeSleep(waitMs, probe);
         continue;
       }
 
@@ -280,7 +356,7 @@ export class HttpClient {
         if (!IDEMPOTENT_METHODS.has(method.toUpperCase()) || attempt >= this.#cfg.maxRetries) {
           throw new KaseyaVsaxServerError(`Server error (${status})${detail}`, { ...errBase, status });
         }
-        await this.#cfg.sleep(this.#backoffMs(attempt));
+        await this.#probeSafeSleep(this.#backoffMs(attempt), probe);
         continue;
       }
 

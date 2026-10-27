@@ -11,14 +11,17 @@ import { BaseResource } from './base.js';
 
 /** Notifications and notification webhooks (`/notifications`). */
 export class NotificationsResource extends BaseResource {
+  /** List notifications (single page). */
   async list(params?: ListParams): Promise<Notification[]> {
     return this.getList<Notification>('/notifications', params);
   }
 
+  /** Iterate over all notifications across pages. */
   listAll(params?: ListParams): PaginatedIterable<Notification> {
     return this.iterate<Notification>('/notifications', params);
   }
 
+  /** Get a notification. */
   async get(id: number | string): Promise<Notification> {
     return this.http.request<Notification>('GET', `/notifications/${pathParam(id, 'notificationId')}`);
   }

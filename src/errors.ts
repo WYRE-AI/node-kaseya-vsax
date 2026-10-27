@@ -32,6 +32,7 @@ export function sanitizeBody(text: string, secrets: readonly string[]): string {
     : scrubbed;
 }
 
+/** Optional fields attached to an SDK error. */
 export interface KaseyaVsaxErrorOptions {
   status?: number;
   code?: string;
@@ -54,6 +55,7 @@ export class KaseyaVsaxError extends Error {
   /** Scrubbed, truncated upstream error text without the "Bad request (400):" style prefix. */
   readonly detail?: string;
 
+  /** Create an SDK error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message);
     this.name = new.target.name;
@@ -73,6 +75,7 @@ function stripQuery(path: string): string {
 
 /** Invalid SDK configuration. Never contains secret material. */
 export class KaseyaVsaxConfigError extends KaseyaVsaxError {
+  /** Create a Config error. */
   constructor(message: string) {
     super(message, { code: 'CONFIG_ERROR' });
   }
@@ -80,6 +83,7 @@ export class KaseyaVsaxConfigError extends KaseyaVsaxError {
 
 /** HTTP 401. */
 export class KaseyaVsaxAuthenticationError extends KaseyaVsaxError {
+  /** Create an Authentication error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, status: 401, code: 'AUTHENTICATION_ERROR' });
   }
@@ -87,6 +91,7 @@ export class KaseyaVsaxAuthenticationError extends KaseyaVsaxError {
 
 /** HTTP 403. */
 export class KaseyaVsaxForbiddenError extends KaseyaVsaxError {
+  /** Create a Forbidden error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, status: 403, code: 'FORBIDDEN' });
   }
@@ -94,6 +99,7 @@ export class KaseyaVsaxForbiddenError extends KaseyaVsaxError {
 
 /** HTTP 404. */
 export class KaseyaVsaxNotFoundError extends KaseyaVsaxError {
+  /** Create a Not found error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, status: 404, code: 'NOT_FOUND' });
   }
@@ -101,6 +107,7 @@ export class KaseyaVsaxNotFoundError extends KaseyaVsaxError {
 
 /** HTTP 400, or invalid caller-supplied input rejected locally (no status). */
 export class KaseyaVsaxValidationError extends KaseyaVsaxError {
+  /** Create a Validation error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: options.code ?? 'VALIDATION_ERROR' });
   }
@@ -110,6 +117,7 @@ export class KaseyaVsaxValidationError extends KaseyaVsaxError {
 export class KaseyaVsaxRateLimitError extends KaseyaVsaxError {
   readonly retryAfterSeconds?: number;
 
+  /** Create an error with the server-reported Retry-After seconds. */
   constructor(message: string, retryAfterSeconds?: number, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, status: 429, code: 'RATE_LIMITED' });
     if (retryAfterSeconds !== undefined) this.retryAfterSeconds = retryAfterSeconds;
@@ -118,6 +126,7 @@ export class KaseyaVsaxRateLimitError extends KaseyaVsaxError {
 
 /** HTTP 5xx. */
 export class KaseyaVsaxServerError extends KaseyaVsaxError {
+  /** Create a Server error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: 'SERVER_ERROR' });
   }
@@ -125,6 +134,7 @@ export class KaseyaVsaxServerError extends KaseyaVsaxError {
 
 /** A 3xx / opaque redirect response. Redirects are never followed. */
 export class KaseyaVsaxRedirectError extends KaseyaVsaxError {
+  /** Create a Redirect error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: 'REDIRECT_REFUSED' });
   }
@@ -132,6 +142,7 @@ export class KaseyaVsaxRedirectError extends KaseyaVsaxError {
 
 /** Unsafe or malformed pagination state (bad NextQueryLink, loops, page cap). */
 export class KaseyaVsaxPaginationError extends KaseyaVsaxError {
+  /** Create a Pagination error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: 'PAGINATION_ERROR' });
   }
@@ -141,6 +152,7 @@ export class KaseyaVsaxPaginationError extends KaseyaVsaxError {
 export class KaseyaVsaxAuthCircuitOpenError extends KaseyaVsaxError {
   readonly retryAfterMs: number;
 
+  /** Create an error carrying the time until the circuit may close. */
   constructor(retryAfterMs: number) {
     super(
       'Authentication circuit breaker is open after repeated 401 responses; ' +
@@ -153,6 +165,7 @@ export class KaseyaVsaxAuthCircuitOpenError extends KaseyaVsaxError {
 
 /** The request exceeded `timeoutMs`. */
 export class KaseyaVsaxTimeoutError extends KaseyaVsaxError {
+  /** Create a Timeout error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: 'TIMEOUT' });
   }
@@ -160,6 +173,7 @@ export class KaseyaVsaxTimeoutError extends KaseyaVsaxError {
 
 /** Transport-level failure (DNS, TLS, connection reset...). */
 export class KaseyaVsaxNetworkError extends KaseyaVsaxError {
+  /** Create a Network error. */
   constructor(message: string, options: KaseyaVsaxErrorOptions = {}) {
     super(message, { ...options, code: 'NETWORK_ERROR' });
   }

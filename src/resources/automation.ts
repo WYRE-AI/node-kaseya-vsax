@@ -20,14 +20,17 @@ import { BaseResource } from './base.js';
 
 /** Automation scripts (`/automation/scripts`). */
 export class ScriptsResource extends BaseResource {
+  /** List scripts (single page). */
   async list(params?: ListParams): Promise<Script[]> {
     return this.getList<Script>('/automation/scripts', params);
   }
 
+  /** Iterate over all scripts across pages. */
   listAll(params?: ListParams): PaginatedIterable<Script> {
     return this.iterate<Script>('/automation/scripts', params);
   }
 
+  /** Get a script. */
   async get(id: string): Promise<Script> {
     return this.http.request<Script>('GET', `/automation/scripts/${pathParam(id, 'scriptId')}`);
   }
@@ -56,14 +59,17 @@ export class ScriptsResource extends BaseResource {
 
 /** Automation tasks (`/automation/tasks`). */
 export class TasksResource extends BaseResource {
+  /** List tasks (single page). */
   async list(params?: ListParams): Promise<Task[]> {
     return this.getList<Task>('/automation/tasks', params);
   }
 
+  /** Iterate over all tasks across pages. */
   listAll(params?: ListParams): PaginatedIterable<Task> {
     return this.iterate<Task>('/automation/tasks', params);
   }
 
+  /** Get a task. */
   async get(id: number | string): Promise<Task> {
     return this.http.request<Task>('GET', `/automation/tasks/${pathParam(id, 'taskId')}`);
   }
@@ -75,6 +81,7 @@ export class TasksResource extends BaseResource {
     });
   }
 
+  /** Get a task execution. */
   async getExecution(executionId: number | string): Promise<TaskExecution> {
     return this.http.request<TaskExecution>(
       'GET',
@@ -82,6 +89,7 @@ export class TasksResource extends BaseResource {
     );
   }
 
+  /** List devices in a task execution. */
   async executionDevices(executionId: number | string, params?: ListParams): Promise<TaskExecutionDevice[]> {
     return this.getList<TaskExecutionDevice>(
       `/automation/tasks/executions/${pathParam(executionId, 'executionId')}/devices`,
@@ -89,6 +97,7 @@ export class TasksResource extends BaseResource {
     );
   }
 
+  /** List scripts run on a device in a task execution. */
   async executionDeviceScripts(
     executionId: number | string,
     deviceId: string,
@@ -100,6 +109,7 @@ export class TasksResource extends BaseResource {
     );
   }
 
+  /** Get the output of a script run on a device. */
   async scriptOutput(executionId: number | string, deviceId: string, scriptId: string): Promise<ScriptOutput> {
     return this.http.request<ScriptOutput>(
       'GET',
@@ -111,14 +121,17 @@ export class TasksResource extends BaseResource {
 
 /** Automation workflows (`/automation/workflows`). */
 export class WorkflowsResource extends BaseResource {
+  /** List workflows (single page). */
   async list(params?: ListParams): Promise<Workflow[]> {
     return this.getList<Workflow>('/automation/workflows', params);
   }
 
+  /** Iterate over all workflows across pages. */
   listAll(params?: ListParams): PaginatedIterable<Workflow> {
     return this.iterate<Workflow>('/automation/workflows', params);
   }
 
+  /** Get a workflow. */
   async get(id: number | string): Promise<Workflow> {
     return this.http.request<Workflow>('GET', `/automation/workflows/${pathParam(id, 'workflowId')}`);
   }
@@ -155,6 +168,7 @@ export class AutomationResource {
   readonly tasks: TasksResource;
   readonly workflows: WorkflowsResource;
 
+  /** Group the scripts, tasks and workflows resources. */
   constructor(scripts: ScriptsResource, tasks: TasksResource, workflows: WorkflowsResource) {
     this.scripts = scripts;
     this.tasks = tasks;

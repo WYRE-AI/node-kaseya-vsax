@@ -57,6 +57,7 @@ export class KaseyaVsaxClient {
   readonly auditLogs: AuditLogsResource;
   readonly rateLimits: RateLimitsResource;
 
+  /** Create a client from the given configuration. */
   constructor(config: KaseyaVsaxConfig) {
     const http = new HttpClient(resolveConfig(config));
     this.#http = http;

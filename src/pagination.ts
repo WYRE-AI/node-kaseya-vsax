@@ -10,6 +10,7 @@
 import { KaseyaVsaxPaginationError } from './errors.js';
 import type { HttpClient, QueryParams } from './http.js';
 
+/** Default page size for list requests. */
 export const DEFAULT_PAGE_SIZE = 100;
 
 /** Common OData list parameters. */
@@ -45,6 +46,7 @@ export class PaginatedIterable<T> implements AsyncIterable<T> {
   readonly #params: ListParams;
   readonly #extra: QueryParams;
 
+  /** Create a lazy paginator over a list endpoint. */
   constructor(http: HttpClient, path: string, params: ListParams = {}, extra: QueryParams = {}) {
     this.#http = http;
     this.#path = path;

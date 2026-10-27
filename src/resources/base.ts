@@ -5,6 +5,7 @@ import { buildListQuery, PaginatedIterable, type ListParams } from '../paginatio
 export abstract class BaseResource {
   protected readonly http: HttpClient;
 
+  /** Bind the resource to an HTTP client. */
   constructor(http: HttpClient) {
     this.http = http;
   }

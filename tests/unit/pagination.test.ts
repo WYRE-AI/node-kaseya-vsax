@@ -75,6 +75,16 @@ describe('NextQueryLink', () => {
     expect(call(f, 1).init.redirect).toBe('manual');
   });
 
+  it('follows a link containing a fragment and strips the fragment from the request URL', async () => {
+    const f = newFetch()
+      .mockResolvedValueOnce(ok(items(2), { TotalCount: 4, NextQueryLink: link('/api/v3/devices?x=1#frag') }))
+      .mockResolvedValueOnce(ok(items(2, 2)));
+    const { client } = makeClient(f);
+    expect(await client.devices.listAll({ top: 2 }).toArray()).toHaveLength(4);
+    expect(call(f, 1).url).toBe(link('/api/v3/devices?x=1'));
+    expect(call(f, 1).url).not.toContain('#');
+  });
+
   it.each([
     ['cross-host', link('/api/v3/devices', 'evil.example')],
     ['suffix lookalike', link('/api/v3/devices', 'acme.vsax.net.evil.com')],
